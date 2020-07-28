@@ -9,10 +9,19 @@ import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.util.ReferenceCountUtil;
+import netty.t03.ClientFrame;
 
 
 public class Client {
+
+    private Channel channel = null;
+
     public static void main(String[] args)  {
+        Client c = new Client();
+        c.connect();
+    }
+
+    public void connect(){
         // 线程池
         EventLoopGroup group = new NioEventLoopGroup(1);
 
@@ -21,15 +30,17 @@ public class Client {
         try {
             ChannelFuture f = b.group(group).channel(NioSocketChannel.class)
                     .handler(new ClientChannelInitializer())
-                    .connect("localhost", 12349)
-                    .sync();
+                    .connect("localhost", 12349).sync();
 
             f.addListener(new ChannelFutureListener() {
+                @Override
                 public void operationComplete(ChannelFuture channelFuture) throws Exception {
                     if (channelFuture.isSuccess()){
                         System.out.println("success");
+                        channel = channelFuture.channel();
                     }else {
                         System.out.println("failure");
+
                     }
                 }
             });
@@ -43,7 +54,17 @@ public class Client {
             group.shutdownGracefully();
         }
     }
+    public void send(String msg){
+        ByteBuf buf = Unpooled.copiedBuffer(msg.getBytes());
+        channel.writeAndFlush(buf);
+    }
+
+    public void closeConnect(){
+        this.send("_bye_");
+    }
 }
+
+
 
 class ClientChannelInitializer extends ChannelInitializer<SocketChannel>{
 
@@ -55,13 +76,15 @@ class ClientChannelInitializer extends ChannelInitializer<SocketChannel>{
 
 class ClientHandler extends ChannelInboundHandlerAdapter{
     @Override
-    public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+    public void channelRead(ChannelHandlerContext ctx, Object msg)  {
         ByteBuf buf = null;
         try{
             buf = (ByteBuf) msg;
             byte[] bytes = new byte[buf.readableBytes()];
             buf.getBytes(buf.readerIndex(), bytes);
-            System.out.println(new String(bytes));
+            String msgAccepted = new String(bytes);
+            ClientFrame.INSTANCE.updateText(msgAccepted);
+            // System.out.println(new String(bytes));
         }finally {
             if (buf != null){
                 ReferenceCountUtil.release(buf);
